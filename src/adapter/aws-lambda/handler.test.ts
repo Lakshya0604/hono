@@ -254,6 +254,60 @@ describe('EventProcessor.createRequest', () => {
     )
   })
 
+  it('Should handle special characters correctly in queryStringParameters for ALB events', () => {
+    const event: LambdaEvent = {
+      httpMethod: 'GET',
+      path: '/search',
+      headers: { host: 'example.test' },
+      body: null,
+      isBase64Encoded: false,
+      // ALB provides decoded values
+      queryStringParameters: {
+        'key with spaces': 'value with spaces',
+        'special!@#$%^&*()': 'chars!@#$%^&*()',
+        equals: 'a=b=c',
+        ampersand: 'a&b&c',
+        日本語: 'こんにちは',
+      },
+      requestContext: {
+        elb: { targetGroupArn: 'arn:aws:elasticloadbalancing:...' },
+      },
+    }
+
+    const request = getProcessor(event).createRequest(event)
+
+    const url = new URL(request.url)
+    expect(url.searchParams.get('key with spaces')).toBe('value with spaces')
+    expect(url.searchParams.get('special!@#$%^&*()')).toBe('chars!@#$%^&*()')
+    expect(url.searchParams.get('equals')).toBe('a=b=c')
+    expect(url.searchParams.get('ampersand')).toBe('a&b&c')
+    expect(url.searchParams.get('日本語')).toBe('こんにちは')
+  })
+
+  it('Should handle special characters correctly in multiValueQueryStringParameters for ALB events', () => {
+    const event: LambdaEvent = {
+      httpMethod: 'GET',
+      path: '/search',
+      headers: { host: 'example.test' },
+      body: null,
+      isBase64Encoded: false,
+      // ALB provides decoded values
+      multiValueQueryStringParameters: {
+        tag: ['a&b', 'c=d'],
+        name: ['John Doe'],
+      },
+      requestContext: {
+        elb: { targetGroupArn: 'arn:aws:elasticloadbalancing:...' },
+      },
+    }
+
+    const request = getProcessor(event).createRequest(event)
+
+    const url = new URL(request.url)
+    expect(url.searchParams.getAll('tag')).toEqual(['a&b', 'c=d'])
+    expect(url.searchParams.get('name')).toBe('John Doe')
+  })
+
   it('Should preserve empty query parameters for ALB events', () => {
     const event: LambdaEvent = {
       httpMethod: 'GET',
